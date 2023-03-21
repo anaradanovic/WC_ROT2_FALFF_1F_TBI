@@ -17,7 +17,7 @@ from fooof.plts.spectra import plot_spectrum
 '''Load Data '''
 
 #first the fMRI matrix from Keith
-path="../Data/tbiattn_Xmeasure_20230118.mat"
+path="../../Data/tbiattn_Xmeasure_20230118.mat"
 
 mat_contents = sio.loadmat(path)
 
@@ -26,7 +26,7 @@ print(mat_contents.keys())
 #then the EEG data
 
 #spectra_data=sio.loadmat("../Data/TBI_restingEEG_Spectra.mat")
-subject_004=sio.loadmat("----")
+subject_004=sio.loadmat("../../Data/EO.mat")
 # %%
 ''' Get all the necessary data from fMRI file'''
 
@@ -219,6 +219,12 @@ for id in eeg_tbi_sess1.keys():
 # %%
 ''' Load EEG data, compute power spectrum, do FOOOF'''
 # %%
+subject_005=sio.loadmat("../../Data/TBIATTN005_EO.mat")
+subject_005=subject_005["TBIATTN005_EO"]
+subject_007=sio.loadmat("../../Data/TBIATTN007_EO.mat")
+subject_007=subject_007["TBIATTN007_EO"]
+
+#%%
 # Create some dummy metadata
 n_channels = 129
 sampling_freq = 1000  # in Hertz
@@ -226,28 +232,40 @@ info = mne.create_info(n_channels, sfreq=sampling_freq,ch_types=['eeg']*129 )
 print(info)
 
 #%% Convert mV to V (so MNE is happy)
-subject_004=subject_004["EO"]
-subject_004 = subject_004*1e-6
+# subject_004=subject_004["EO"]
+# subject_004 = subject_004*1e-6
+subject_005 = subject_005*1e-6
+subject_007 = subject_007*1e-6
 #sub_004_EC = sub_004_EC*1e-6
 #%%
 preproc = mne.io.RawArray(subject_004, info)
 #preproc_EC = mne.io.RawArray(sub_004_EC, info)
-
+preproc_005 = mne.io.RawArray(subject_005, info)
+preproc_007 = mne.io.RawArray(subject_007, info)
 # %%
-spectrum=preproc.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
+spectrum_004=preproc.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
+spectrum_005=preproc_005.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
+spectrum_007=preproc_007.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
+
 #spectrum_EC=preproc_EC.compute_psd(fmin= 2, fmax=40)
 # %%
 spectrum_data, freqs=spectrum.get_data(return_freqs=True)
+spectrum_data_005, freqs=spectrum_005.get_data(return_freqs=True)
+spectrum_data_007, freqs=spectrum_007.get_data(return_freqs=True)
+
 #%%
 fm = FOOOFGroup(peak_width_limits=[2, 10], max_n_peaks=4, min_peak_height=0.1, aperiodic_mode='fixed')
-fm.fit(freqs, spectrum_data, [5, 40])
+fm.fit(freqs, spectrum_data_005, [5, 40])
 fm.print_results()
 
 # %%
 #test one fooof
-test_fm=FOOOF()
-freq_range = [2, 40]
+test_fm=FOOOF(peak_width_limits=[2, 10], 
+              max_n_peaks=6,
+              min_peak_height=0.1,
+              aperiodic_mode="fixed")
+freq_range = [5, 40]
 
 # Report: fit the model, print the resulting parameters, and plot the reconstruction
-test_fm.report(freqs, spectrum_data.mean(axis=0), freq_range)
+test_fm.report(freqs, spectrum_data_005.mean(axis=0), freq_range)
 # %%
