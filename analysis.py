@@ -219,6 +219,7 @@ for id in eeg_tbi_sess1.keys():
 # %%
 ''' Load EEG data, compute power spectrum, do FOOOF'''
 # %%
+subject_004=subject_004['EO']
 subject_005=sio.loadmat("../../Data/TBIATTN005_EO.mat")
 subject_005=subject_005["TBIATTN005_EO"]
 subject_007=sio.loadmat("../../Data/TBIATTN007_EO.mat")
@@ -232,8 +233,8 @@ info = mne.create_info(n_channels, sfreq=sampling_freq,ch_types=['eeg']*129 )
 print(info)
 
 #%% Convert mV to V (so MNE is happy)
-# subject_004=subject_004["EO"]
-# subject_004 = subject_004*1e-6
+#subject_004=subject_004["EO"]
+subject_004 = subject_004*1e-6
 subject_005 = subject_005*1e-6
 subject_007 = subject_007*1e-6
 #sub_004_EC = sub_004_EC*1e-6
@@ -249,23 +250,58 @@ spectrum_007=preproc_007.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=100
 
 #spectrum_EC=preproc_EC.compute_psd(fmin= 2, fmax=40)
 # %%
-spectrum_data, freqs=spectrum.get_data(return_freqs=True)
+spectrum_data, freqs=spectrum_004.get_data(return_freqs=True)
 spectrum_data_005, freqs=spectrum_005.get_data(return_freqs=True)
 spectrum_data_007, freqs=spectrum_007.get_data(return_freqs=True)
 
 #%%
-fm = FOOOFGroup(peak_width_limits=[2, 10], max_n_peaks=4, min_peak_height=0.1, aperiodic_mode='fixed')
-fm.fit(freqs, spectrum_data_005, [5, 40])
-fm.print_results()
+'''GROUP'''
 
+dic_concat_sub_data={"subject_004" : spectrum_data,
+                     "subject_005" : spectrum_data_005,
+                     "subject_007" : spectrum_data_007}
+
+def get_aper_exp (sub_spect, condi, freqs):
+    '''
+        Computes the FOOOF of a spectra and
+        returns its averaged aperiodic exponent.
+    '''
+    fm = FOOOFGroup(peak_width_limits=[2, 10], 
+                        max_n_peaks=4, 
+                        min_peak_height=0.1, 
+                        aperiodic_mode=condi)
+    fm.fit(freqs, sub_spect, [5, 40])
+    
+    return fm.get_params('aperiodic_params', 'exponent').mean(axis=0)
+
+#%% For all subject, run the fooof fitting with "knee" and "fixed", then store in
+#   the new df "group_exp_results"
+
+group_exp_results=pd.DataFrame(columns=["Subject_ID", "fixed_aper_exp", "knee_aper_exp"])
+
+for sub in dic_concat_sub_data.keys():
+    
+    fixed_aper_exp = get_aper_exp(dic_concat_sub_data[sub], "fixed", freqs)
+    knee_aper_exp  = get_aper_exp(dic_concat_sub_data[sub], "knee", freqs)
+    
+    group_exp_results.loc[len(group_exp_results.index)] = [sub, fixed_aper_exp, knee_aper_exp]
+        
 # %%
-#test one fooof
+'''ONE FOOOF MEAN CHANNELS'''
 test_fm=FOOOF(peak_width_limits=[2, 10], 
               max_n_peaks=6,
               min_peak_height=0.1,
-              aperiodic_mode="fixed")
+              aperiodic_mode="knee")
 freq_range = [5, 40]
 
 # Report: fit the model, print the resulting parameters, and plot the reconstruction
-test_fm.report(freqs, spectrum_data_005.mean(axis=0), freq_range)
+test_fm.report(freqs, spectrum_data.mean(axis=0), freq_range)
+plt.show()
+#%%
+results_test=test_fm.get_results()
 # %%
+''' investigate errors'''
+
+from fooof.analysis.error import compute_pointwise_error_fm, compute_pointwise_error_fg
+# %%
+compute_pointwise_error_fm(test_fm, plot_errors=True)
