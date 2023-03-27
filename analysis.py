@@ -7,6 +7,7 @@ from scipy import stats
 from statsmodels.stats import multitest
 import mne
 import matplotlib.pyplot as plt
+import os
 
 from fooof import FOOOFGroup
 from fooof.bands import Bands
@@ -24,9 +25,63 @@ mat_contents = sio.loadmat(path)
 print(mat_contents.keys())
 
 #then the EEG data
+data_path='../../fALFF-EEG_Spectra/'
+condition = 'EO'
 
-#spectra_data=sio.loadmat("../Data/TBI_restingEEG_Spectra.mat")
-subject_004=sio.loadmat("../../Data/EO.mat")
+#%% CREATING A DICT FROM THE MAIN FOLDER THAT CONTAINNING THE EEG DATA 
+data_dict = {}
+
+avail_sub = [x[-3:] for x in os.listdir('../../fALFF-EEG_Spectra')]
+
+for subject in avail_sub:
+    tmp = os.listdir('{}TBI{}/'.format(data_path, subject))
+    data_file = [x for x in tmp if x.split('.')[0][-2:]=='EO']
+    if len(data_file) != 0:
+        tmp = sio.loadmat('{}TBI{}/{}'.format(data_path, 
+                                          subject, 
+                                          data_file[0]))
+        data_key = [i for i in tmp.keys() if i[-2:]==condition][0]
+        if (isinstance(tmp[data_key], np.ndarray)) and (data_tmp.shape[0] == 129):
+            data_dict[subject] = tmp[data_key]*1e-6
+
+#%% CREATE A SFREQ_DICT THAT CONTAINS SFREQ FOR EACH SUBJECT
+# TBI001 - TBI018 : 1000Hz  
+# TBI021 - TBI052 : 250Hz  
+# TBI055 - TBI061 : 1000Hz
+
+thousand_1 = ['0{}'.format(x) if len(str(x))==2 else '00{}'.format(x) for x in range(1, 19)]
+thousand_2 = ['0{}'.format(x) if len(str(x))==2 else '00{}'.format(x) for x in range(55, 62)]
+thousandHz = thousand_1 + thousand_2
+twofiftyHz = ['0{}'.format(x) for x in range(21, 53)]
+
+sfreq_dict = { k:1000 for k in thousandHz}
+sfreq_dict.update({ k:250 for k in twofiftyHz})
+
+#%% DEFINE HELPER FUNCTIONS 
+def create_custom_raw (eeg_data, n_ch, sfreq):
+    ''' Create a raw with given propeties'''
+    info = mne.create_info(n_ch, sfreq=sfreq,ch_types=['eeg']*n_ch)
+    return mne.io.RawArray(eeg_data, info)
+
+def compute_spectra (raw, fmin, fmax, n_fft=None):
+    power_spectrum = raw.compute_psd(fmin=fmin, fmax=fmax, method='welch', n_fft=n_fft)
+    return power_spectrum
+
+# spectrum_data, freqs = power_spectrum.get_data(return_freqs=True)
+#%% CREATE POWER_SPECTRUM_DICT
+
+n_ch = 129
+fmin = 0
+fmax = 40
+
+power_spectrum_dict = {}
+
+for sub in data_dict.keys():
+    
+    raw = create_custom_raw(data_dict[sub], n_ch, sfreq_dict[sub])
+    print(sub)
+    power_spectrum_dict[sub] = compute_spectra(raw, fmin, fmax, n_fft=sfreq_dict[sub])
+
 # %%
 ''' Get all the necessary data from fMRI file'''
 
@@ -219,40 +274,40 @@ for id in eeg_tbi_sess1.keys():
 # %%
 ''' Load EEG data, compute power spectrum, do FOOOF'''
 # %%
-subject_004=subject_004['EO']
-subject_005=sio.loadmat("../../Data/TBIATTN005_EO.mat")
-subject_005=subject_005["TBIATTN005_EO"]
-subject_007=sio.loadmat("../../Data/TBIATTN007_EO.mat")
-subject_007=subject_007["TBIATTN007_EO"]
+# subject_004=subject_004['EO']
+# subject_005=sio.loadmat("../../Data/TBIATTN005_EO.mat")
+# subject_005=subject_005["TBIATTN005_EO"]
+# subject_007=sio.loadmat("../../Data/TBIATTN007_EO.mat")
+# subject_007=subject_007["TBIATTN007_EO"]
 
 #%%
-# Create some dummy metadata
-n_channels = 129
-sampling_freq = 1000  # in Hertz
-info = mne.create_info(n_channels, sfreq=sampling_freq,ch_types=['eeg']*129 )
-print(info)
+# # Create some dummy metadata
+# n_channels = 129
+# sampling_freq = 1000  # in Hertz
+# info = mne.create_info(n_channels, sfreq=sampling_freq,ch_types=['eeg']*129 )
+# print(info)
 
 #%% Convert mV to V (so MNE is happy)
 #subject_004=subject_004["EO"]
-subject_004 = subject_004*1e-6
-subject_005 = subject_005*1e-6
-subject_007 = subject_007*1e-6
+# subject_004 = subject_004*1e-6
+# subject_005 = subject_005*1e-6
+# subject_007 = subject_007*1e-6
 #sub_004_EC = sub_004_EC*1e-6
 #%%
-preproc = mne.io.RawArray(subject_004, info)
-#preproc_EC = mne.io.RawArray(sub_004_EC, info)
-preproc_005 = mne.io.RawArray(subject_005, info)
-preproc_007 = mne.io.RawArray(subject_007, info)
+# preproc = mne.io.RawArray(subject_004, info)
+# #preproc_EC = mne.io.RawArray(sub_004_EC, info)
+# preproc_005 = mne.io.RawArray(subject_005, info)
+# preproc_007 = mne.io.RawArray(subject_007, info)
 # %%
-spectrum_004=preproc.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
-spectrum_005=preproc_005.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
-spectrum_007=preproc_007.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
+# spectrum_004=preproc.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
+# spectrum_005=preproc_005.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
+# spectrum_007=preproc_007.compute_psd(fmin= 0, fmax=40, method='welch', n_fft=1000)
 
 #spectrum_EC=preproc_EC.compute_psd(fmin= 2, fmax=40)
 # %%
-spectrum_data, freqs=spectrum_004.get_data(return_freqs=True)
-spectrum_data_005, freqs=spectrum_005.get_data(return_freqs=True)
-spectrum_data_007, freqs=spectrum_007.get_data(return_freqs=True)
+# spectrum_data, freqs=spectrum_004.get_data(return_freqs=True)
+# spectrum_data_005, freqs=spectrum_005.get_data(return_freqs=True)
+# spectrum_data_007, freqs=spectrum_007.get_data(return_freqs=True)
 
 #%%
 '''GROUP'''
