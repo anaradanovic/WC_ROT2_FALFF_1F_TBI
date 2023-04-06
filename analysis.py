@@ -57,6 +57,11 @@ twofiftyHz = ['0{}'.format(x) for x in range(21, 53)]
 sfreq_dict = { k:1000 for k in thousandHz}
 sfreq_dict.update({ k:250 for k in twofiftyHz})
 
+#%%
+#Healthy Control Data
+
+
+
 #%% DEFINE HELPER FUNCTIONS 
 def create_custom_raw (eeg_data, n_ch, sfreq):
     ''' Create a raw with given propeties'''
@@ -69,6 +74,8 @@ def compute_spectra (raw, fmin, fmax, n_fft=None):
     power_spectrum = raw.compute_psd(fmin=fmin, fmax=fmax, method='welch', n_fft=n_fft)
     return power_spectrum
 
+#%%
+#hydra_mon=mne.channels.make_standard_montage('GSN-HydroCel-129')
 #%% CREATE POWER_SPECTRUM_DICT
 
 n_ch = 129
@@ -80,6 +87,7 @@ power_spectrum_dict = {}
 for sub in data_dict.keys():
     
     raw = create_custom_raw(data_dict[sub], n_ch, sfreq_dict[sub])
+    # raw.set_montage(hydra_mon, on_missing='ignore')
     print(sub)
     power_spectrum_dict[sub] = compute_spectra(raw, fmin, fmax, n_fft=sfreq_dict[sub])
 
@@ -326,7 +334,29 @@ group_exp_results_filtered= group_exp_results[group_exp_results['Subject_ID'].is
 group_exp_results_filtered=group_exp_results_filtered.sort_values(by='Subject_ID',ascending=True)
 
 #%%
-frontal_picks= ['1','6','5','11','13']
+elec_names=pd.read_csv('../../Data/ChanlocLines128.csv')
+elec_names=elec_names.to_dict(orient='list')
+
+#remove E's from the names
+elec_dict = {}
+for key, value in elec_names.items():
+    if key.startswith("E"):
+        new_key = key[1:]  # slice the key to remove the "E"
+    else:
+        new_key = key
+    elec_dict[new_key] = value
+
+#make it so that the values are not in a list
+elec_name_dict = {key: value[0] for key, value in elec_dict.items()}
+
+#now create the picks based off the dict
+frontal_picks= []
+for key, value in elec_name_dict.items():
+    if value.startswith("F"):
+        frontal_picks.append(key)
+
+
+#%%
 frontal_group_exp=pd.DataFrame(columns=["Subject_ID", "fixed_aper_exp", "knee_aper_exp"])
 
 for sub in power_spectrum_dict.keys():
@@ -372,12 +402,12 @@ compute_pointwise_error_fm(test_fm, plot_errors=True)
 
 #%%
 
-plt.scatter(frontal_group_exp_filter["knee_aper_exp"],falff_tbi_sess1['Frontal_FALFF'])
+plt.scatter(frontal_group_exp_filter["fixed_aper_exp"],falff_tbi_sess1['Frontal_FALFF'])
 
 # Set the x and y axis labels
 plt.xlabel('Frontal EEG Exponent Value')
 plt.ylabel('Frontal FALFF Value')
-plt.title('Knee Aperiodic Exp')
+plt.title('Fixed Aperiodic Exp')
 
 
 plt.show()
